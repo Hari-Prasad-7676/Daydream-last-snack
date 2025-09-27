@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sacrifice Bird Game</title>
+<style>
+  body { margin:0; overflow:hidden; background:skyblue; font-family:sans-serif; }
+  #game { position:relative; width:480px; height:640px; margin:auto; background:skyblue; overflow:hidden; border:2px solid #000; }
+  .player { width:50px; height:50px; position:absolute; left:50px; top:300px; }
+  .obstacle, .key { width:50px; height:50px; position:absolute; }
+  #message, #score, #lives { text-align:center; color:white; font-size:20px; margin:5px; }
+  #hud { position:absolute; width:100%; top:0; left:0; display:flex; justify-content:space-between; padding:0 10px; }
+  .heart { width:30px; height:30px; margin-right:5px; }
+</style>
+</head>
+<body>
+
+<div id="message">The bird must sacrifice itself to save the master! Press SPACE to flap.</div>
+
+<div id="hud">
+  <div id="score">Score: 0</div>
+  <div id="lives"></div>
+</div>
+
+<div id="game">
+  <img src="https://img.icons8.com/?size=100&id=2qjU9IcT2Yjt&format=png&color=000000" class="player" id="player">
+</div>
+
+<!-- ✅ Load JSZip -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<script>
+const game = document.getElementById('game');
+const player = document.getElementById('player');
+const message = document.getElementById('message');
+const scoreDisplay = document.getElementById('score');
+const livesDiv = document.getElementById('lives');
+
+let playerY = 300;
+let velocity = 0;
+const gravity = 0.5;
+const flapStrength = -10;
+let gameOver = false;
+let score = 0;
+let lives = 3;
+
+let obstacles = [];
+let key = null;
+let keyCollected = false;
+
+// Display lives as hearts
+function updateLives() {
+  livesDiv.innerHTML = '';
+  for(let i=0;i<lives;i++){
+    const heart = document.createElement('img');
+    heart.src = 'https://cdn-icons-png.flaticon.com/128/833/833472.png';
+    heart.className = 'heart';
+    livesDiv.appendChild(heart);
+  }
+}
+updateLives();
+
+// Spawn obstacle
+function spawnObstacle() {
+  const obs = document.createElement('img');
+  obs.src = 'https://cdn-icons-png.flaticon.com/128/565/565547.png';
+  obs.className = 'obstacle';
+  obs.style.left = '480px';
+  obs.style.top = Math.random() * 590 + 'px';
+  obs.passed = false;
+  game.appendChild(obs);
+  obstacles.push(obs);
+}
+
+// Spawn key
+function spawnKey() {
+  if(key || keyCollected) return;
+  key = document.createElement('img');
+  key.src = 'https://cdn-icons-png.flaticon.com/128/709/709496.png';
+  key.className = 'key';
+  key.style.left = Math.random() * 400 + 'px';
+  key.style.top = Math.random() * 550 + 'px';
+  game.appendChild(key);
+}
+
+document.addEventListener('keydown', (e) => {
+  if(gameOver) return;
+  if(e.code === 'Space') velocity = flapStrength;
+});
+
+// ✅ Function to extract ZIP and open HTML
+async function openSnackZip() {
+  try {
+    const response = await fetch("last snack f.zip"); // put zip in same folder
+    const blob = await response.blob();
+    const zip = await JSZip.loadAsync(blob);
+
+    // Look for first HTML file
+    for (const filename of Object.keys(zip.files)) {
+      if (filename.endsWith(".html")) {
+        const html = await zip.files[filename].async("string");
+        const newWindow = window.open();
+        newWindow.document.open();
+        newWindow.document.write(html);
+        newWindow.document.close();
+        break;
+      }
+    }
+  } catch (err) {
+    alert("Error opening snack.zip: " + err);
+  }
+}
+
+function gameLoop(){
+  if(gameOver) return;
+
+  // Bird movement
+  velocity += gravity;
+  playerY += velocity;
+  if(playerY<0) playerY=0;
+  if(playerY>590) playerY=590;
+  player.style.top = playerY + 'px';
+
+  // Obstacles movement & collision
+  obstacles.forEach(obs => {
+    let left = parseFloat(obs.style.left);
+    left -= 4;
+    obs.style.left = left + 'px';
+
+    const playerRect = player.getBoundingClientRect();
+    const obsRect = obs.getBoundingClientRect();
+
+    if (!(playerRect.right < obsRect.left || playerRect.left > obsRect.right || playerRect.bottom < obsRect.top || playerRect.top > obsRect.bottom)) {
+      lives--;
+      updateLives();
+      obs.remove();
+      if(lives <=0) endGame(false);
+    }
+
+    if(!obs.passed && left+50<50){
+      score++;
+      scoreDisplay.textContent = 'Score: '+score;
+      obs.passed=true;
+    }
+  });
+
+  obstacles = obstacles.filter(o => parseFloat(o.style.left)>-50);
+
+  // Key collision
+  if(key && !keyCollected){
+    const playerRect = player.getBoundingClientRect();
+    const keyRect = key.getBoundingClientRect();
+    if (!(playerRect.right < keyRect.left || playerRect.left > keyRect.right || playerRect.bottom < keyRect.top || playerRect.top > keyRect.bottom)) {
+      keyCollected=true;
+      key.remove();
+      endGame(true); // master saved
+    }
+  }
+
+  // Random spawns
+  if(Math.random()<0.02) spawnObstacle();
+  if(Math.random()<0.005) spawnKey();
+
+  requestAnimationFrame(gameLoop);
+}
+
+function endGame(saved){
+  gameOver=true;
+  if(saved){
+    message.textContent = "💀 The bird collected the key and saved the master!";
+    openSnackZip(); // ✅ unzip and open html
+  } else {
+    message.textContent = "💀 The bird fell! The master is lost!";
+  }
+}
+
+gameLoop();
+</script>
+
+</body>
+</html>
